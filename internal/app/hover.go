@@ -108,14 +108,21 @@ func readHover(ctx context.Context, key hoverKey) (string, error) {
 			}
 		}
 	}
-	if key.Diagnostic != "" {
-		if text != "" {
-			text = key.Diagnostic + "\n---\n" + text
-		} else {
-			text = key.Diagnostic
-		}
+	return joinHoverText(key.Diagnostic, text), nil
+}
+
+// joinHoverText combines the diagnostic at the cursor with the hover text
+// from the language server. The blank lines around "---" matter: a bare
+// "---" directly under a line of text is a Markdown setext heading
+// underline, not a divider.
+func joinHoverText(diagnostic, text string) string {
+	if diagnostic == "" {
+		return text
 	}
-	return text, nil
+	if text == "" {
+		return diagnostic
+	}
+	return diagnostic + "\n\n---\n\n" + text
 }
 
 func (a *App) stopHoverTask() {

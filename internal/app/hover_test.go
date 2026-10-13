@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/lsp"
+	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
@@ -132,6 +134,47 @@ func TestHoverDiagnosticFallbackWithoutServerOrOnStartupFailure(t *testing.T) {
 		if err != nil || text != "diagnostic" {
 			t.Fatalf("fallback with server %q = %q, error = %v", server, text, err)
 		}
+	}
+}
+
+func TestJoinHoverTextSeparatesDiagnosticWithDivider(t *testing.T) {
+	lines := markdown.Render(joinHoverText("declared and not used: x", "var x int"))
+
+	var nonBlank []markdown.Line
+	for _, l := range lines {
+		if l.Kind != markdown.KindBlank {
+			nonBlank = append(nonBlank, l)
+		}
+	}
+	if len(nonBlank) == 0 {
+		t.Fatal("rendered hover text had no content")
+	}
+	if got := nonBlank[0]; got.Kind != markdown.KindParagraph || got.Text() != "declared and not used: x" {
+		t.Fatalf("first line = %+v, want a paragraph %q", got, "declared and not used: x")
+	}
+
+	sawDivider := false
+	for _, l := range nonBlank {
+		switch l.Kind {
+		case markdown.KindDivider:
+			sawDivider = true
+		case markdown.KindHeading:
+			t.Fatalf("diagnostic rendered as a heading: %q", l.Text())
+		}
+	}
+	if !sawDivider {
+		t.Fatal("no divider between the diagnostic and the hover text")
+	}
+
+	if last := nonBlank[len(nonBlank)-1]; !strings.Contains(last.Text(), "var x int") {
+		t.Fatalf("last line = %q, want it to contain %q", last.Text(), "var x int")
+	}
+
+	if got := joinHoverText("", "var x int"); got != "var x int" {
+		t.Fatalf("joinHoverText(%q, text) = %q, want %q", "", got, "var x int")
+	}
+	if got := joinHoverText("diagnostic", ""); got != "diagnostic" {
+		t.Fatalf("joinHoverText(diagnostic, %q) = %q, want %q", "", got, "diagnostic")
 	}
 }
 
